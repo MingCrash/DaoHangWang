@@ -10,7 +10,7 @@ class TenderinfospSpider(scrapy.Spider):
     name = 'tenderInfoSP'
     allowed_domains = ['okcis.cn']
     start_urls = ['http://www.okcis.cn/20180627-n2-20180627130254024334.html']
-
+    cur_page = None
     column_map = {
         '招标公告':'search_column-bn',
         '中标结果':'search_column-rn',
@@ -26,7 +26,9 @@ class TenderinfospSpider(scrapy.Spider):
         '半年内':'timezb-4',
         '一年内':'timezb-5'
     }
-    stop = False
+    def __init__(self):
+        super(TenderinfospSpider, self).__init__()
+        self.cur_page = 1
 
     def get_localtime(self):
         return time.strftime("%Y-%m-%d", time.localtime())
@@ -36,36 +38,30 @@ class TenderinfospSpider(scrapy.Spider):
             for j in settings.get('COLUMN'):
                 search_column = self.column_map[j]
                 url = 'http://www.okcis.cn/as/keystr-{sw}/{sc}/{timzb}'.format(sw=i,sc=search_column,timzb=self.timezb_map[settings.get('TIMEZB')])
-                yield Request(url=url,callback=self.nextRequest_generator,meta={'sc':j,'sw':i})
+                yield Request(url=url,callback=self.get_pagenum_parse,meta={'sc':j,'sw':i})
 
-    # def nextRequest_generator(self, response):
-    #     cur_page = 1
-    #     stop = None
-    #     while True:
-    #         if stop: break
-    #         url = response.url + '/page-{i}'.format(i=cur_page)
-    #         print('发出第{dd}请求'.format(dd=cur_page))
-    #         stop = yield Request(url=url, callback=self.test_parse,meta={'sc': response.meta['sc'], 'sw': response.meta['sw'], 'curnum':cur_page})
-    #         cur_page += 1
-    #         time.sleep(10)     #延迟5秒，等待响应返回配合self.stop做判断
-
-    def nextRequest_generator(self, response):
-        cur_page = 1
-        url = response.url + '/page-{i}'.format(i=cur_page)
-        print('发出第{dd}请求'.format(dd=cur_page))
-        yield Request(url=url, callback=self.test_parse,meta={'sc': response.meta['sc'], 'sw': response.meta['sw'], 'curnum':cur_page})
-        cur_page += 1
-        # time.sleep(10)     #延迟5秒，等待响应返回配合self.stop做判断
-
-    def test_parse(self, response):
-        print('抓取{sw}结果第{num}页的所有招标项>>>>>>>'.format(sw=response.meta['sw'],num=response.meta['curnum']),response.url,'<<<<<<<')
-        items = response.css('.xiangmu_ta_20140617').xpath('tr[@id]')
-        if not items:
-            print('>>>>>>>关键字"{sw}"在此页已再无"{sc}"信息<<<<<<<'.format(sw=response.meta['sw'],sc=response.meta['sc']))
-            # self.nextRequest_generator().send(False)
+    def get_pagenum_parse(self, response):
+        ress = response.css('.main_m_ta_20140615').xpath('./tr/td[1]/div[@class="gongyouxmn_20140626"]/div[2]/p/b/text()').extract_first()
+        if int(ress) == 0:
+            print('>>>>>>>关键字"{sw}"无"{sc}"信息<<<<<<<'.format(sw=response.meta['sw'],sc=response.meta['sc']))
             return
         else:
-            self.nextRequest_generator()
+            pages = (int(ress) // 50)+1
+            if pages >= 100:pages = 99
+
+            print('>>>>>>>关键字"{sw}"有{ress}项共{num}页"{sc}"信息<<<<<<<'.format(ress=ress,sw=response.meta['sw'],num=pages,sc=response.meta['sc']))
+            for i in range(1, pages+1):
+                url = response.url + '/page-{i}'.format(i=i)
+                yield Request(url=url, callback=self.bidingItme_parse,
+                              meta={'sc': response.meta['sc'], 'sw': response.meta['sw'], 'curnum':i})
+
+    def bidingItme_parse(self, response):
+        print('>>>>>>>抓取"{sw}"结果第{num}页的所有招标项>>>>>>>'.format(sw=response.meta['sw'],num=response.meta['curnum']),response.url,'<<<<<<<')
+        items = response.css('.xiangmu_ta_20140617').xpath('tr[@id]')  # tr[@id] 代表找到当前路径下所有带id属性tr标签
+        if not items:
+            print('>>>>>>关键字"{sw}"在{num}页已再无"{sc}"信息<<<<<<<'.format(sw=response.meta['sw'],sc=response.meta['sc'],num=response.meta['curnum']))
+            return
+        else:
             for item in items:
                 url = 'http://www.okcis.cn/' + item.xpath('./td[4]/div/a/@href').extract_first()
                 yield Request(url=url, callback=self.bidingContent_parse,

@@ -7,24 +7,22 @@
 import os
 import sys
 from scrapy.conf import settings
+from scrapy.signals import spider_closed
 
 class Size16M_Pipeline(object):
     buffer_list = None
+    filename = None
 
     def __init__(self):
         self.buffer_list = []
+        self.filename = 0
 
-    def __del__(self):
+    def close_spider(self, spider):
         if self.buffer_list:
-            with open('{path}/{cfn}'.format(cfn=self.generator_filename().__next__(), path=settings.get('STORE_PATH')),'a+') as f:
+            with open('{path}/{cfn}'.format(cfn='{}.txt'.format(self.filename + 1), path=settings.get('STORE_PATH')),
+                      'a+') as f:
                 f.writelines(self.buffer_list)
                 self.buffer_list.clear()
-
-    def generator_filename(self):
-        i=0
-        while True:
-            yield '{d}.txt'.format(d=i)
-            i =+ 1
 
     def process_item(self, item, spider):
         str = '《Root》《S1》{url}《/S1》《S5》{ct}《/S5》《S2》{pf}《/S2》《S3a》{sc}《/S3a》《S3b》{produc}《S3b》《S4》{pjn}《/S4》《S6》{pt}《/S6》《S7》{deadTime}《/S7》《S8》{address}《/S8》《S9》{st}《/S9》《S10》{sum}《/S10》《Q1》{detail}《/Q1》《G15》{bp}《/G15》《G16》{bpa}《/G16》《G17》{bpc}《/G17》《G18》{bpp}《/G18》《G19》{tenderee}《/G19》《G21》{tc}《/G21》《G22》{tpN}《/G22》《G23》{wb}《/G23》《G24》{wba}《/G24》《G25》{wbc}《/G25》《G24》{wbpN}《/G24》《Root》\n'.format(
@@ -43,10 +41,11 @@ class Size16M_Pipeline(object):
             wba=item.setdefault('winbiderAddr', ''),
             wbc=item.setdefault('winbider_contacter', ''), wbpN=item.setdefault('winbider_phoneNum', ''))
 
+        print(sys.getsizeof(self.buffer_list))
         if not sys.getsizeof(self.buffer_list) > settings.get('FILE_SIZE'):
             self.buffer_list.append(str)
         else:
-            with open('{path}/{cfn}'.format(cfn=self.generator_filename().__next__(), path=settings.get('STORE_PATH')),'a+') as f:
+            with open('{path}/{cfn}'.format(cfn='{}.txt'.format(self.filename+1), path=settings.get('STORE_PATH')),'a+') as f:
                 f.writelines(self.buffer_list)
                 self.buffer_list.clear()
 
