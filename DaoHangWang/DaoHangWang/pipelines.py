@@ -45,7 +45,8 @@ class Size16M_Pipeline(object):
         if not sys.getsizeof(self.buffer_list) > settings.get('FILE_SIZE'):
             self.buffer_list.append(str)
         else:
-            with open('{path}/{cfn}'.format(cfn='{}.txt'.format(self.filename+1), path=settings.get('STORE_PATH')),'a+') as f:
+            self.filename = self.filename
+            with open('{path}/{cfn}'.format(cfn='{}.txt'.format(self.filename), path=settings.get('STORE_PATH')),'a+') as f:
                 f.writelines(self.buffer_list)
                 self.buffer_list.clear()
 
